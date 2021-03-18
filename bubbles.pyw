@@ -18,7 +18,8 @@ class Settings(object):
     images_path = os.path.join(file_path, "assets", "images")
     sounds_path = os.path.join(file_path, "assets", "sounds")
     nof_bubbles = width * height // 50000
-    min_bubble_dist = 100
+    bubble_bubble_dist = 10
+    bubble_border_dist = 100
     #time values in ms
     base_time_units = 1000
 
@@ -40,6 +41,9 @@ class Media:
     def load_media():
         Media.bubble_sprite = pygame.image.load(os.path.join(Settings.images_path, "bubble.png")).convert_alpha()
         Media.background = pygame.image.load(os.path.join(Settings.images_path, 'background.png')).convert()
+        Media.default_cursor = pygame.image.load(os.path.join(Settings.images_path, 'cursor1.png')).convert_alpha()
+        Media.pop_cursor = pygame.image.load(os.path.join(Settings.images_path, 'cursor1.png')).convert_alpha()
+        Media.placeholder = pygame.image.load(os.path.join(Settings.images_path, 'placeholder.png')).convert()
 
 
 class Background(pygame.sprite.Sprite):
@@ -52,8 +56,25 @@ class Background(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.image = pygame.transform.scale(self.image, Settings.get_dim())
 
-    def draw(self, screen):
-        screen.blit(self.image, self.rect)
+
+class Cursor(pygame.sprite.Sprite):
+    def __init__(self, game):
+        super().__init__()
+        self.game = game
+        self.image = Media.default_cursor
+        self.rect = self.image.get_rect()
+        pygame.mouse.set_visible(False)
+        self.update()
+    
+    def update(self):
+        self.rect.left, self.rect.top = pygame.mouse.get_pos()
+        if self.game.bubble_cursor_collide_at(self.get_pos()):
+            self.image = Media.pop_cursor
+        else:
+            self.image = Media.default_cursor
+        
+    def get_pos(self):
+        return (self.rect.top, self.rect.left)
 
 
 class Bubble(pygame.sprite.Sprite):
@@ -63,16 +84,16 @@ class Bubble(pygame.sprite.Sprite):
     def __init__(self, game):
         super().__init__()
         self.game = game
-        self.x = random.randint(Settings.min_bubble_dist, Settings.width - Settings.min_bubble_dist)
-        self.y = random.randint(Settings.min_bubble_dist, Settings.height - Settings.min_bubble_dist)
+        self.image_base = Media.bubble_sprite
+        self.x = random.randint(Settings.bubble_border_dist, Settings.width - Settings.bubble_border_dist)
+        self.y = random.randint(Settings.bubble_border_dist, Settings.height - Settings.bubble_border_dist)
         self.growth_rate = random.randint(1,4)
         self.radius = 5
         self.update()
 
     def update(self):
         self.radius += self.growth_rate
-        self.image = Media.bubble_sprite
-        self.image = pygame.transform.scale(self.image, [self.radius*2, self.radius*2])
+        self.image = pygame.transform.scale(self.image_base, [self.radius*2, self.radius*2])
         self.rect = self.image.get_rect()
         self.rect.centerx = self.x
         self.rect.centery = self.y
@@ -90,7 +111,8 @@ class Bubble(pygame.sprite.Sprite):
         return math.sqrt( (self.x - other_bubble.x)**2 + (self.y - other_bubble.y)**2 )
 
     def coll_with_bubble(self, other_bubble):
-        return math.sqrt( (self.x - other_bubble.x)**2 + (self.y - other_bubble.y)**2 ) <= (self.radius + other_bubble.radius)
+        coll = math.sqrt( (self.x - other_bubble.x)**2 + (self.y - other_bubble.y)**2 ) <= (self.radius + other_bubble.radius)
+        return coll
 
 
 class Text(pygame.sprite.Sprite):
@@ -134,9 +156,11 @@ class Game(object):
         self.score = 0
 
         #sprites
-        self.background = Background()
+        self.background = pygame.sprite.GroupSingle(Background())
         self.all_bubbles = pygame.sprite.Group()
-
+        self.cursor = pygame.sprite.GroupSingle(Cursor(self))
+        
+        
         #texts
         self.all_texts = pygame.sprite.Group()
         self.texts_by_name = {
@@ -155,9 +179,11 @@ class Game(object):
             self.handle_events()
             self.add_bubble()
             if self.bubble_wall_collide():
-                self.done = True
+                pass
+                #self.done = True
             if self.bubble_bubble_collide():
-                self.done = True
+                pass
+                #self.done = True
             self.update()
             self.draw()
     
@@ -172,15 +198,17 @@ class Game(object):
                 if event.key == pygame.K_ESCAPE:
                     self.done = True 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                self.pop_bubble_at(pygame.mouse.get_pos())
+                self.pop_bubble()
 
     def update(self):
             self.all_bubbles.update()
+            self.cursor.update()
 
     def draw(self):
             self.background.draw(self.screen)
             self.all_bubbles.draw(self.screen)
             self.all_texts.draw(self.screen)
+            self.cursor.draw(self.screen)
             pygame.display.flip()
 
     def increase_score(self, value):
@@ -196,7 +224,7 @@ class Game(object):
             def new_bubble():
                 new_b = Bubble(self)
                 for b in self.all_bubbles:
-                    if new_b.dist_to_bubble(b) <= new_b.radius + b.radius + Settings.min_bubble_dist:
+                    if new_b.dist_to_bubble(b) <= new_b.radius + b.radius + Settings.bubble_bubble_dist:
                         return False
                 return new_b
             
@@ -206,11 +234,10 @@ class Game(object):
             self.all_bubbles.add(new_b)
             self.last_bubble_time = pygame.time.get_ticks()
 
-    def pop_bubble_at(self, pos):
-        for b in self.all_bubbles:
-            if b.point_is_inside(pos):
-                b.kill()
-                self.increase_score(b.get_value())
+    def pop_bubble(self):
+        if  bubble := self.bubble_cursor_collide_at(self.cursor.sprite.get_pos()):
+            bubble.kill()
+            self.increase_score(bubble.get_value())
 
     def bubble_wall_collide(self):
         for b in self.all_bubbles:
@@ -223,6 +250,11 @@ class Game(object):
                 if b1.coll_with_bubble(b2) and i2 > i1:
                     return True
 
+    def bubble_cursor_collide_at(self, pos):
+        for bubble in self.all_bubbles:
+            if bubble.point_is_inside(pos):
+                return bubble
+    
 
 if __name__ == '__main__':
     pygame.init()
