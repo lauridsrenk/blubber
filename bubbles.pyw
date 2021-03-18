@@ -42,7 +42,7 @@ class Media:
         Media.bubble_sprite = pygame.image.load(os.path.join(Settings.images_path, "bubble.png")).convert_alpha()
         Media.background = pygame.image.load(os.path.join(Settings.images_path, 'background.png')).convert()
         Media.default_cursor = pygame.image.load(os.path.join(Settings.images_path, 'cursor1.png')).convert_alpha()
-        Media.pop_cursor = pygame.image.load(os.path.join(Settings.images_path, 'cursor1.png')).convert_alpha()
+        Media.pop_cursor = pygame.image.load(os.path.join(Settings.images_path, 'cursor2.png')).convert_alpha()
         Media.placeholder = pygame.image.load(os.path.join(Settings.images_path, 'placeholder.png')).convert()
 
 
@@ -72,9 +72,10 @@ class Cursor(pygame.sprite.Sprite):
             self.image = Media.pop_cursor
         else:
             self.image = Media.default_cursor
+            
         
     def get_pos(self):
-        return (self.rect.top, self.rect.left)
+        return (self.rect.left, self.rect.top)
 
 
 class Bubble(pygame.sprite.Sprite):
@@ -99,7 +100,8 @@ class Bubble(pygame.sprite.Sprite):
         self.rect.centery = self.y
      
     def point_is_inside(self, point):
-        return math.sqrt( (self.x - point[0])**2 + (self.y - point[1])**2 ) <= self.radius
+        dist = math.sqrt( (self.x - point[0])**2 + (self.y - point[1])**2 )
+        return dist <= self.radius
 
     def get_value(self):
         return self.radius
@@ -111,8 +113,7 @@ class Bubble(pygame.sprite.Sprite):
         return math.sqrt( (self.x - other_bubble.x)**2 + (self.y - other_bubble.y)**2 )
 
     def coll_with_bubble(self, other_bubble):
-        coll = math.sqrt( (self.x - other_bubble.x)**2 + (self.y - other_bubble.y)**2 ) <= (self.radius + other_bubble.radius)
-        return coll
+        return math.sqrt( (self.x - other_bubble.x)**2 + (self.y - other_bubble.y)**2 ) <= (self.radius + other_bubble.radius)
 
 
 class Text(pygame.sprite.Sprite):
@@ -179,11 +180,9 @@ class Game(object):
             self.handle_events()
             self.add_bubble()
             if self.bubble_wall_collide():
-                pass
-                #self.done = True
+                self.done = True
             if self.bubble_bubble_collide():
-                pass
-                #self.done = True
+                self.done = True
             self.update()
             self.draw()
     
@@ -235,7 +234,8 @@ class Game(object):
             self.last_bubble_time = pygame.time.get_ticks()
 
     def pop_bubble(self):
-        if  bubble := self.bubble_cursor_collide_at(self.cursor.sprite.get_pos()):
+        if i := self.bubble_cursor_collide_at(self.cursor.sprite.get_pos()):
+            bubble = self.all_bubbles.sprites()[i-1]
             bubble.kill()
             self.increase_score(bubble.get_value())
 
@@ -251,9 +251,9 @@ class Game(object):
                     return True
 
     def bubble_cursor_collide_at(self, pos):
-        for bubble in self.all_bubbles:
+        for i, bubble in enumerate(self.all_bubbles):
             if bubble.point_is_inside(pos):
-                return bubble
+                return i + 1
     
 
 if __name__ == '__main__':
