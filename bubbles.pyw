@@ -152,6 +152,8 @@ class Game(object):
 		Media.load_media()
 		self.clock = pygame.time.Clock()
 		self.done = False
+		self.paused = False
+		self.quit = False
 		pygame.display.set_caption(Settings.title)
 
 		#game variables
@@ -163,7 +165,6 @@ class Game(object):
 		self.background = pygame.sprite.GroupSingle(Background())
 		self.all_bubbles = pygame.sprite.Group()
 		self.cursor = pygame.sprite.GroupSingle(Cursor(self))
-		
 		
 		#texts
 		self.all_texts = pygame.sprite.Group()
@@ -178,27 +179,41 @@ class Game(object):
 		"""
 		Main game loop
 		"""
-		while not self.done:
-			self.clock.tick(Settings.fps)
-			self.handle_events()
-			self.add_bubble()
-			if self.bubble_wall_collide():
-				self.done = True
-			if self.bubble_bubble_collide():
-				self.done = True
-			self.update()
-			self.draw()
+		while not self.quit:
+			self.new_round()
+			while not self.done:
+				self.clock.tick(Settings.fps)
+				self.handle_events()
+				self.add_bubble()
+				if self.bubble_wall_collide():
+					self.done = True
+				if self.bubble_bubble_collide():
+					self.done = True
+				self.update()
+				self.draw()
+	
+	def new_round(self):
+		self.done = False
+		self.paused = False
+		self.quit = False
+		self.last_bubble_time = pygame.time.get_ticks()
+		self.time_units = Settings.base_time_units
+		self.score = 0
+		
+		self.all_bubbles.empty()
+		self.increase_score(0)
+		
 	
 	def handle_events(self):
 		for event in pygame.event.get():
 			#Quit on window closed
 			if event.type == pygame.QUIT:
-				self.done = True
+				self.quit = True
 
 			if event.type == pygame.KEYUP:
 				#"Quit on ESC
 				if event.key == pygame.K_ESCAPE:
-					self.done = True 
+					self.quit = True 
 			if event.type == pygame.MOUSEBUTTONDOWN:
 				self.pop_bubble()
 
