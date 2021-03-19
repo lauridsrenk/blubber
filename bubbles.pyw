@@ -43,7 +43,7 @@ class Media:
 		Media.background = pygame.image.load(os.path.join(Settings.images_path, 'background.png')).convert()
 		Media.default_cursor = pygame.image.load(os.path.join(Settings.images_path, 'cursor1.png')).convert_alpha()
 		Media.pop_cursor = pygame.image.load(os.path.join(Settings.images_path, 'cursor2.png')).convert_alpha()
-        Media.placeholder = pygame.image.load(os.path.join(Settings.images_path, 'placeholder.png')).convert()
+		Media.placeholder = pygame.image.load(os.path.join(Settings.images_path, 'placeholder.png')).convert()
 
 
 class Background(pygame.sprite.Sprite):
@@ -71,7 +71,7 @@ class Cursor(pygame.sprite.Sprite):
 	
 	def update(self):
 		self.rect.left, self.rect.top = pygame.mouse.get_pos()
-		if self.game.bubble_cursor_collide_at(self.get_pos()) != -1:
+		if self.game.bubble_cursor_collide_at() != -1:
 			self.image = Media.pop_cursor
 		else:
 			self.image = Media.default_cursor
@@ -227,9 +227,9 @@ class Game(object):
 		self.texts_by_name["score"].set_text(f"{self.score} points")
 
 	def add_bubble(self):
-        """
-        Adds a bubble with a minimum distance to the Border and other Bubbles
-        """
+		"""
+		Adds a bubble with a minimum distance to the Border and other Bubbles
+		"""
 		if (len(self.all_bubbles) <= Settings.nof_bubbles and 
 		pygame.time.get_ticks() > self.last_bubble_time + self.time_units):
 			def new_bubble():
@@ -246,10 +246,10 @@ class Game(object):
 			self.last_bubble_time = pygame.time.get_ticks()
 
 	def pop_bubble(self):
-        """
-        pops the bubble in contact with the cursor
-        """
-		i = self.bubble_cursor_collide_at(self.cursor.sprite.get_pos())
+		"""
+		pops the bubble in contact with the cursor
+		"""
+		i = self.bubble_cursor_collide_at()
 		if i != -1:
 			bubble = self.all_bubbles.sprites()[i]
 			bubble.kill()
@@ -268,9 +268,9 @@ class Game(object):
 					return True
 		return False
 
-	def bubble_cursor_collide_at(self, pos):
+	def bubble_cursor_collide_at(self):
 		for i, bubble in enumerate(self.all_bubbles):
-			if bubble.point_is_inside(pos):
+			if bubble.point_is_inside(self.cursor.sprite.get_pos()):
 				return i
 		return -1
 	
