@@ -374,7 +374,13 @@ class Game_Over(Scene):
         self.main_text = pygame.sprite.GroupSingle(Text(Settings.font, 36, Settings.font_color, 5, 5))
         self.main_text.sprite.set_text("Game Over!")
         self.main_text.sprite.center()
+        
         self.highscore_text = pygame.sprite.GroupSingle(Text(Settings.font, 24, Settings.font_color, 5, 5))
+        
+        self.restart_button = pygame.sprite.GroupSingle(Text(Settings.font, 24, Settings.font_color, 5, 5))
+        self.restart_button.sprite.set_text("Try Again")
+        self.restart_button.sprite.center_x()
+        self.restart_button.sprite.get_rect().bottom = 0
         
         self.cursor = pygame.sprite.GroupSingle(Cursor(self))
         self.background = pygame.sprite.GroupSingle(Background(main.screenshot()))
@@ -383,6 +389,7 @@ class Game_Over(Scene):
             self.background,
             self.main_text,
             self.highscore_text,
+            self.restart_button,
             self.cursor
         ]
         
