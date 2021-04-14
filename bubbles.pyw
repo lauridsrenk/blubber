@@ -161,15 +161,14 @@ class Text(pygame.sprite.Sprite):
 class Scene(object):
     def __init__(self, screen, clock, main):
         self.screen = screen
-        self.clock = clock
         self.main = main
+        self.clock = clock
         self.done = False
-        #print(f"#new scene: {self}")
-        #print(f"main: {self.main}")
+        self.all_sprite_groups = []
         
     def run(self):
         while not self.done:
-            self.clock.tick()
+            self.clock.tick(Settings.fps)
             self.update()
             self.handle_events()
             self.draw()
@@ -178,10 +177,13 @@ class Scene(object):
         pass
         
     def update(self):
-        pass
+        for sg in self.all_sprite_groups:
+            sg.update()
         
     def draw(self):
-        pass
+        for sg in self.all_sprite_groups:
+            sg.draw(self.screen)
+        pygame.display.flip()
         
     def end(self):
         self.done = True
@@ -209,7 +211,13 @@ class Main_Game(Scene):
         for t in self.texts_by_name:
             self.all_texts.add(self.texts_by_name[t])
             
-        self.pause = Pause(self.screen, self.clock, self)
+        self.all_sprite_groups = [
+            self.background,
+            self.all_bubbles,
+            self.all_texts,
+            self.cursor
+        ]
+            
             
     def run(self):
         while not self.done:
@@ -237,28 +245,7 @@ class Main_Game(Scene):
                 if event.button == 1:
                     self.pop_bubble()
                 elif event.button == 3:
-                    self.reset_pause()
-                    self.pause.run()
-
-    def reset_pause(self):
-        self.pause = Pause(self.screen, self.clock, self)
-        
-    def update(self):
-            """
-            Sprite Updates
-            """
-            self.all_bubbles.update()
-            self.cursor.update()
-
-    def draw(self):
-            """
-            Draw the current Frame
-            """
-            self.background.draw(self.screen)
-            self.all_bubbles.draw(self.screen)
-            self.all_texts.draw(self.screen)
-            self.cursor.draw(self.screen)
-            pygame.display.flip()
+                    self.main.pause()
 
     def increase_score(self, value):
         """
@@ -313,15 +300,21 @@ class Main_Game(Scene):
         self.cursor.sprite.kill()
         self.draw()
         self.cursor.sprite = Cursor(self, self.all_bubbles)
-        return Background(self.screen.copy())
+        return self.screen.copy()
 
 
 class Pause(Scene):
     def __init__(self, screen, clock, main):
         super().__init__(screen, clock, main)
-        self.background = pygame.sprite.GroupSingle(self.main.screenshot())
+        self.background = pygame.sprite.GroupSingle(Background(self.main.screenshot()))
         self.grayfilter = pygame.sprite.GroupSingle(Background(Media.grayfilter))
         self.cursor = pygame.sprite.GroupSingle(Cursor(self))
+            
+        self.all_sprite_groups = [
+            self.background,
+            self.grayfilter,
+            self.cursor
+        ]
             
     def handle_events(self):
         for event in pygame.event.get():
@@ -336,52 +329,24 @@ class Pause(Scene):
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 3:
                     self.done = True
-                    
-    def draw(self):
-        self.background.draw(self.screen)
-        self.grayfilter.draw(self.screen)
-        self.cursor.draw(self.screen)
-        pygame.display.flip()
-        
-    def update(self):
-        self.cursor.update()
     
 
 class Game_Over(Scene):
     def __init__(self, screen, clock, main):
         super().__init__(screen, clock, main)
-        self.game = Main_Game(screen, clock, self)
-        
-        self.nof_gameover = 0
-        
         #sprites and text
         self.main_text = pygame.sprite.GroupSingle(Text(Settings.font, 36, Settings.font_color, 5, 5))
         self.main_text.sprite.set_text("Game Over!")
         self.main_text.sprite.center()
         
         self.cursor = pygame.sprite.GroupSingle(Cursor(self))
-        self.background = pygame.sprite.GroupSingle(Background(Media.background))
+        self.background = pygame.sprite.GroupSingle(Background(main.screenshot()))
         
-    def draw(self):
-        self.background.draw(self.screen)
-        self.main_text.draw(self.screen)
-        self.cursor.draw(self.screen)
-        pygame.display.flip()
-        
-    def run(self):
-        while not self.done:
-            self.clock.tick()
-            self.update()
-            self.handle_events()
-            self.draw()
-            
-    def update(self):
-        if self.nof_gameover == 0:
-            self.game.run()
-        self.nof_gameover += 1
-        self.background.sprite = self.game.screenshot()
-        
-        self.cursor.update()
+        self.all_sprite_groups = [
+            self.background,
+            self.main_text,
+            self.cursor
+        ]
         
     def handle_events(self):
         for event in pygame.event.get():
@@ -395,29 +360,39 @@ class Game_Over(Scene):
                     self.end()
 
 
-class Game_Controller(Scene):
+class Game_Controller(object):
     """
     Main game object
     """
     def __init__(self):
         self.screen = pygame.display.set_mode(Settings.get_dim())
         self.clock = pygame.time.Clock()
-        super().__init__(self.screen, self.clock, None)
         Media.load_media()
         pygame.display.set_caption(Settings.title)
-        self.Main_Scene_Class = Game_Over
-        self.main_scene = self.Main_Scene_Class(self.screen, self.clock, self)
+        self.main_game_scene = Main_Game(self.screen, self.clock, self)
+        self.game_over_scene = Game_Over(self.screen, self.clock, self)
+        self.pause_scene = Pause(self.screen, self.clock, self)
+        self.done = False
 
     def run(self):
         """
         Main game loop
         """
         while not self.done:
-            self.main_scene = self.Main_Scene_Class(self.screen, self.clock, self)
-            self.main_scene.run()
+            self.main_game_scene = Main_Game(self.screen, self.clock, self)
+            self.main_game_scene.run()
+            self.game_over_scene = Game_Over(self.screen, self.clock, self)
+            self.game_over_scene.run()
+            
+    def pause(self):
+        self.pause_scene = Pause(self.screen, self.clock, self)
+        self.pause_scene.run()
             
     def end(self):
         self.done = True
+       
+    def screenshot(self):
+        return self.main_game_scene.screenshot()
 
     
 
