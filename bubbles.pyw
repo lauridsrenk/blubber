@@ -20,6 +20,7 @@ class Settings(object):
     nof_bubbles = width * height // 50000
     bubble_bubble_dist = 10
     bubble_border_dist = 100
+    max_higscore_entries = 5
     #time values in ms
     base_time_units = 1000
 
@@ -150,6 +151,21 @@ class Text(pygame.sprite.Sprite):
     def center(self):
         w, h = Settings.get_dim()
         self.set_pos((w - self.rect.width) // 2, (h - self.rect.height) // 2)
+        
+    def center_x(self):
+        self.set_left((Settings.width - self.rect.width) // 2 )
+        
+    def center_y(self):
+        self.set_top((Settings.height - self.rect.height) // 2 )
+        
+    def set_left(self, left):
+        self.rect.left = left
+    
+    def set_top(self, top):
+        self.rect.top = top
+        
+    def get_rect(self):
+        return self.rect
 
 
 class Scene(object):
@@ -310,6 +326,9 @@ class Main_Game(Scene):
         else:
             self.cursor.sprite.set_default_cursor()
 
+    def get_score(self):
+        return self.score
+
 
 class Pause(Scene):
     def __init__(self, screen, clock, main):
@@ -355,6 +374,7 @@ class Game_Over(Scene):
         self.main_text = pygame.sprite.GroupSingle(Text(Settings.font, 36, Settings.font_color, 5, 5))
         self.main_text.sprite.set_text("Game Over!")
         self.main_text.sprite.center()
+        self.highscore_text = pygame.sprite.GroupSingle(Text(Settings.font, 24, Settings.font_color, 5, 5))
         
         self.cursor = pygame.sprite.GroupSingle(Cursor(self))
         self.background = pygame.sprite.GroupSingle(Background(main.screenshot()))
@@ -362,12 +382,16 @@ class Game_Over(Scene):
         self.all_sprite_groups = [
             self.background,
             self.main_text,
+            self.highscore_text,
             self.cursor
         ]
         
     def run(self):
         self.done = False
         self.background.sprite = Background(self.main.screenshot())
+        self.highscore_text.sprite.set_text("Highscores: " + ", ".join(map(str, self.main.get_highscores())))
+        self.highscore_text.sprite.center_x()
+        self.highscore_text.sprite.set_top(self.main_text.sprite.get_rect().bottom)
         while not self.done:
             self.clock.tick(Settings.fps)
             self.update()
@@ -407,7 +431,9 @@ class Game_Controller(object):
         while not self.done:
             self.main_game_scene = Main_Game(self.screen, self.clock, self)
             self.main_game_scene.run()
-            if not self.done: self.game_over_scene.run()
+            if not self.done: 
+                self.save_highscores()
+                self.game_over_scene.run()
             
     def pause(self):
         self.pause_scene.run()
@@ -417,7 +443,20 @@ class Game_Controller(object):
        
     def screenshot(self):
         return self.main_game_scene.screenshot()
-
+        
+    def save_highscores(self):
+        highscores = self.get_highscores() + [self.get_score()]
+        highscores = sorted(highscores,reverse=True)[:Settings.max_higscore_entries]
+        score_file = open(os.path.join(Settings.file_path, "score.txt"), "w")
+        score_file.write("\n".join(map(str,highscores)))
+        
+    def get_score(self):
+        return self.main_game_scene.get_score()
+        
+    def get_highscores(self):
+        score_file = open(os.path.join(Settings.file_path, "score.txt"), "r")
+        highscores = sorted(map(int, score_file.readlines()),reverse=True)[:Settings.max_higscore_entries]
+        return highscores
     
 
 if __name__ == '__main__':
