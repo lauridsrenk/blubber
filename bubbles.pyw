@@ -61,10 +61,9 @@ class Cursor(pygame.sprite.Sprite):
     """
     Custom Cursor
     """
-    def __init__(self, game, bubbles = False):
+    def __init__(self, game,):
         super().__init__()
         self.game = game
-        self.bubbles = bubbles
         self.image = Media.default_cursor
         self.rect = self.image.get_rect()
         pygame.mouse.set_visible(False)
@@ -72,20 +71,15 @@ class Cursor(pygame.sprite.Sprite):
     
     def update(self):
         self.rect.left, self.rect.top = pygame.mouse.get_pos()
-        if self.bubbles:
-            if self.coll_with_bubble(self.bubbles) != -1:
-                self.image = Media.pop_cursor
-            else:
-                self.image = Media.default_cursor
             
     def get_pos(self):
         return (self.rect.left, self.rect.top)
         
-    def coll_with_bubble(self, bubbles):
-        for i, bubble in enumerate(bubbles):
-            if bubble.point_is_inside(self.get_pos()):
-                return i
-        return -1
+    def set_pop_cursor(self):
+            self.image = Media.pop_cursor
+        
+    def set_default_cursor(self):
+            self.image = Media.default_cursor
 
 
 class Bubble(pygame.sprite.Sprite):
@@ -167,6 +161,7 @@ class Scene(object):
         self.all_sprite_groups = []
         
     def run(self):
+        self.done = False
         while not self.done:
             self.clock.tick(Settings.fps)
             self.update()
@@ -200,7 +195,7 @@ class Main_Game(Scene):
         #sprites
         self.background = pygame.sprite.GroupSingle(Background(Media.background))
         self.all_bubbles = pygame.sprite.Group()
-        self.cursor = pygame.sprite.GroupSingle(Cursor(self, self.all_bubbles))
+        self.cursor = pygame.sprite.GroupSingle(Cursor(self))
         
         #texts
         self.all_texts = pygame.sprite.Group()
@@ -217,8 +212,7 @@ class Main_Game(Scene):
             self.all_texts,
             self.cursor
         ]
-            
-            
+
     def run(self):
         while not self.done:
             self.clock.tick(Settings.fps)
@@ -228,6 +222,7 @@ class Main_Game(Scene):
                 self.done = True
             if self.bubble_bubble_collide():
                 self.done = True
+            self.handle_cursor_icon()
             self.update()
             self.draw()
 
@@ -277,7 +272,7 @@ class Main_Game(Scene):
         """
         pops the bubble in contact with the cursor
         """
-        i = self.cursor.sprite.coll_with_bubble(self.all_bubbles)
+        i = self.cursor_bubble_collide()
         if i != -1:
             bubble = self.all_bubbles.sprites()[i]
             bubble.kill()
@@ -299,8 +294,21 @@ class Main_Game(Scene):
     def screenshot(self):
         self.cursor.sprite.kill()
         self.draw()
-        self.cursor.sprite = Cursor(self, self.all_bubbles)
+        self.cursor.sprite = Cursor(self)
         return self.screen.copy()
+    
+    def cursor_bubble_collide(self):
+        pos = self.cursor.sprite.get_pos()
+        for i, bubble in enumerate(self.all_bubbles.sprites()):
+            if bubble.point_is_inside(pos):
+                return i
+        return -1
+
+    def handle_cursor_icon(self):
+        if self.cursor_bubble_collide() != -1:
+            self.cursor.sprite.set_pop_cursor()
+        else:
+            self.cursor.sprite.set_default_cursor()
 
 
 class Pause(Scene):
@@ -315,6 +323,15 @@ class Pause(Scene):
             self.grayfilter,
             self.cursor
         ]
+        
+    def run(self):
+        self.done = False
+        self.background.sprite = Background(self.main.screenshot())
+        while not self.done:
+            self.clock.tick(Settings.fps)
+            self.update()
+            self.handle_events()
+            self.draw()
             
     def handle_events(self):
         for event in pygame.event.get():
@@ -348,6 +365,15 @@ class Game_Over(Scene):
             self.cursor
         ]
         
+    def run(self):
+        self.done = False
+        self.background.sprite = Background(self.main.screenshot())
+        while not self.done:
+            self.clock.tick(Settings.fps)
+            self.update()
+            self.handle_events()
+            self.draw()
+            
     def handle_events(self):
         for event in pygame.event.get():
             #Quit on window closed
@@ -381,11 +407,9 @@ class Game_Controller(object):
         while not self.done:
             self.main_game_scene = Main_Game(self.screen, self.clock, self)
             self.main_game_scene.run()
-            self.game_over_scene = Game_Over(self.screen, self.clock, self)
-            self.game_over_scene.run()
+            if not self.done: self.game_over_scene.run()
             
     def pause(self):
-        self.pause_scene = Pause(self.screen, self.clock, self)
         self.pause_scene.run()
             
     def end(self):
