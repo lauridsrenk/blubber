@@ -20,6 +20,7 @@ class Settings(object):
     nof_bubbles = width * height // 50000
     bubble_bubble_dist = 10
     bubble_border_dist = 100
+    button_border_dist = 10
     max_higscore_entries = 5
     #time values in ms
     base_time_units = 1000
@@ -371,18 +372,19 @@ class Game_Over(Scene):
     def __init__(self, screen, clock, main):
         super().__init__(screen, clock, main)
         #sprites and text
-        self.main_text = pygame.sprite.GroupSingle(Text(Settings.font, 36, Settings.font_color, 5, 5))
+        self.main_text = pygame.sprite.GroupSingle(Text(Settings.font, 48, Settings.font_color, 5, 5))
         self.main_text.sprite.set_text("Game Over!")
         self.main_text.sprite.center()
         
         self.highscore_text = pygame.sprite.GroupSingle(Text(Settings.font, 24, Settings.font_color, 5, 5))
         
-        self.restart_button = pygame.sprite.GroupSingle(Text(Settings.font, 24, Settings.font_color, 5, 5))
+        self.restart_button = pygame.sprite.GroupSingle(Text(Settings.font, 48, Settings.font_color, 5, 5))
         self.restart_button.sprite.set_text("Try Again")
         self.restart_button.sprite.center_x()
-        self.restart_button.sprite.get_rect().bottom = 0
+        self.restart_button.sprite.get_rect().bottom = Settings.height - Settings.button_border_dist
         
         self.cursor = pygame.sprite.GroupSingle(Cursor(self))
+        
         self.background = pygame.sprite.GroupSingle(Background(main.screenshot()))
         
         self.all_sprite_groups = [
@@ -396,13 +398,14 @@ class Game_Over(Scene):
     def run(self):
         self.done = False
         self.background.sprite = Background(self.main.screenshot())
-        self.highscore_text.sprite.set_text("Highscores: " + ", ".join(map(str, self.main.get_highscores())))
+        self.highscore_text.sprite.set_text("Highscores: " + ";  ".join(map(str, self.main.get_highscores())))
         self.highscore_text.sprite.center_x()
         self.highscore_text.sprite.set_top(self.main_text.sprite.get_rect().bottom)
         while not self.done:
             self.clock.tick(Settings.fps)
             self.update()
             self.handle_events()
+            self.handle_cursor_icon()
             self.draw()
             
     def handle_events(self):
@@ -415,7 +418,23 @@ class Game_Over(Scene):
                 #"Quit on ESC
                 if event.key == pygame.K_ESCAPE:
                     self.end()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    self.press_button()
 
+    def cursor_button_collide(self):
+        return self.restart_button.sprite.get_rect().collidepoint(self.cursor.sprite.get_pos())
+
+    def handle_cursor_icon(self):
+        if self.cursor_button_collide():
+            self.cursor.sprite.set_pop_cursor()
+        else:
+            self.cursor.sprite.set_default_cursor()
+            
+    def press_button(self):
+        if self.cursor_button_collide():
+            self.done = True
+    
 
 class Game_Controller(object):
     """
