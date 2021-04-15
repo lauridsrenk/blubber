@@ -13,7 +13,7 @@ class Settings(object):
     fps = 60
     title = "Bubbles"
     font = pygame.font.match_font("RockwellExtra")
-    font_color = [255,255,255]
+    font_color = [240,10,90]
     file_path = os.path.dirname(os.path.abspath(__file__))
     images_path = os.path.join(file_path, "assets", "images")
     sounds_path = os.path.join(file_path, "assets", "sounds")
@@ -22,6 +22,10 @@ class Settings(object):
     bubble_border_dist = 100
     button_border_dist = 10
     max_higscore_entries = 5
+    time_units_per_bubble_spawn = 2
+    time_units_per_speed_up = 10
+    speed_up_value = 0.7
+    points_multiplier = 4
     #time values in ms
     base_time_units = 1000
 
@@ -41,11 +45,13 @@ class Settings(object):
 class Media:
     @staticmethod
     def load_media():
-        Media.bubble_sprite = pygame.image.load(os.path.join(Settings.images_path, "bubble.png")).convert_alpha()
-        Media.background = pygame.image.load(os.path.join(Settings.images_path, 'background.png')).convert()
+        Media.bubble_sprite = pygame.image.load(os.path.join(Settings.images_path, "bubble2.png")).convert_alpha()
+        Media.background = pygame.image.load(os.path.join(Settings.images_path, 'background2.jpg')).convert()
         Media.default_cursor = pygame.image.load(os.path.join(Settings.images_path, 'cursor1.png')).convert_alpha()
         Media.pop_cursor = pygame.image.load(os.path.join(Settings.images_path, 'cursor2.png')).convert_alpha()
         Media.grayfilter = pygame.image.load(os.path.join(Settings.images_path, 'grayfilter.png')).convert_alpha()
+        Media.bubble_pop_sound = pygame.mixer.Sound(os.path.join(Settings.sounds_path, 'bubble_pop.mp3'))
+        Media.bubble_spawn_sound = pygame.mixer.Sound(os.path.join(Settings.sounds_path, 'blow_up3.mp3'))
 
 
 class Background(pygame.sprite.Sprite):
@@ -72,16 +78,19 @@ class Cursor(pygame.sprite.Sprite):
         self.update()
     
     def update(self):
-        self.rect.left, self.rect.top = pygame.mouse.get_pos()
+        self.rect.centerx, self.rect.bottom = pygame.mouse.get_pos()
             
     def get_pos(self):
-        return (self.rect.left, self.rect.top)
+        return (self.rect.centerx, self.rect.bottom)
         
     def set_pop_cursor(self):
             self.image = Media.pop_cursor
         
     def set_default_cursor(self):
             self.image = Media.default_cursor
+
+    def get_rect(self):
+        return self.rect
 
 
 class Bubble(pygame.sprite.Sprite):
@@ -92,14 +101,17 @@ class Bubble(pygame.sprite.Sprite):
         super().__init__()
         self.game = game
         self.image_base = Media.bubble_sprite
+        self.pop_sound = Media.bubble_pop_sound
         self.x = random.randint(Settings.bubble_border_dist, Settings.width - Settings.bubble_border_dist)
         self.y = random.randint(Settings.bubble_border_dist, Settings.height - Settings.bubble_border_dist)
         self.growth_rate = random.randint(1,4)
         self.radius = 5
+        self.last_growth_time = pygame.time.get_ticks()
         self.update()
+        Media.bubble_spawn_sound.play()
 
     def update(self):
-        self.radius += self.growth_rate
+        self.grow()
         self.image = pygame.transform.scale(self.image_base, [self.radius*2, self.radius*2])
         self.rect = self.image.get_rect()
         self.rect.centerx = self.x
@@ -120,6 +132,16 @@ class Bubble(pygame.sprite.Sprite):
 
     def coll_with_bubble(self, other_bubble):
         return math.sqrt( (self.x - other_bubble.x)**2 + (self.y - other_bubble.y)**2 ) <= (self.radius + other_bubble.radius)
+        
+    def grow(self):
+        current_time = pygame.time.get_ticks()
+        if current_time >= self.last_growth_time + self.game.time_units:
+            self.last_growth_time = current_time
+            self.radius += self.growth_rate
+            
+    def bubblekill(self):
+        self.pop_sound.play()
+        self.kill()
 
 
 class Text(pygame.sprite.Sprite):
@@ -205,8 +227,9 @@ class Scene(object):
 class Main_Game(Scene):
     def __init__(self, screen, clock, main):
         super().__init__(screen, clock, main)
-        self.last_bubble_time = pygame.time.get_ticks()
         self.time_units = Settings.base_time_units
+        self.last_bubble_time = pygame.time.get_ticks()
+        self.last_speed_up_time = pygame.time.get_ticks()
         self.score = 0
         
         #sprites
@@ -231,16 +254,12 @@ class Main_Game(Scene):
         ]
 
     def run(self):
-        while not self.done:
+        while not (self.done or self.main.done):
             self.clock.tick(Settings.fps)
             self.handle_events()
-            self.add_bubble()
-            if self.bubble_wall_collide():
-                self.done = True
-            if self.bubble_bubble_collide():
-                self.done = True
-            self.handle_cursor_icon()
             self.update()
+            self.handle_cursor_icon()
+            self.game_rules()
             self.draw()
 
     def handle_events(self):
@@ -253,6 +272,9 @@ class Main_Game(Scene):
                 #"Quit on ESC
                 if event.key == pygame.K_ESCAPE:
                     self.end()
+                if event.key == pygame.K_p:
+                    self.main.pause()
+                    
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     self.pop_bubble()
@@ -271,7 +293,7 @@ class Main_Game(Scene):
         Adds a bubble with a minimum distance to the Border and other Bubbles
         """
         if (len(self.all_bubbles) <= Settings.nof_bubbles and 
-        pygame.time.get_ticks() > self.last_bubble_time + self.time_units):
+        pygame.time.get_ticks() > self.last_bubble_time + self.time_units * Settings.time_units_per_bubble_spawn):
             def new_bubble():
                 new_b = Bubble(self)
                 for b in self.all_bubbles:
@@ -292,8 +314,8 @@ class Main_Game(Scene):
         i = self.cursor_bubble_collide()
         if i != -1:
             bubble = self.all_bubbles.sprites()[i]
-            bubble.kill()
-            self.increase_score(bubble.get_value())
+            bubble.bubblekill()
+            self.increase_score(bubble.get_value() * Settings.points_multiplier)
 
     def bubble_wall_collide(self):
         for b in self.all_bubbles:
@@ -305,6 +327,8 @@ class Main_Game(Scene):
         for i1, b1 in enumerate(self.all_bubbles):
             for i2, b2 in enumerate(self.all_bubbles):
                 if b1.coll_with_bubble(b2) and i2 > i1:
+                    Media.bubble_pop_sound.play()
+                    Media.bubble_pop_sound.play()
                     return True
         return False
 
@@ -329,6 +353,19 @@ class Main_Game(Scene):
 
     def get_score(self):
         return self.score
+
+    def speed_up(self):
+        if pygame.time.get_ticks() >= self.last_speed_up_time + Settings.base_time_units * Settings.time_units_per_speed_up:
+            self.last_speed_up_time = pygame.time.get_ticks() 
+            self.time_units *= Settings.speed_up_value
+            
+    def game_rules(self):
+            self.add_bubble()
+            self.speed_up()
+            if self.bubble_wall_collide():
+                self.done = True
+            if self.bubble_bubble_collide():
+                self.done = True
 
 
 class Pause(Scene):
@@ -363,6 +400,10 @@ class Pause(Scene):
                 #"Quit on ESC
                 if event.key == pygame.K_ESCAPE:
                     self.end()
+                    
+                if event.key == pygame.K_p:
+                    self.done = True
+                    
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 3:
                     self.done = True
@@ -373,13 +414,13 @@ class Game_Over(Scene):
         super().__init__(screen, clock, main)
         #sprites and text
         self.main_text = pygame.sprite.GroupSingle(Text(Settings.font, 48, Settings.font_color, 5, 5))
-        self.main_text.sprite.set_text("Game Over!")
+        self.main_text.sprite.set_text("Game Over")
         self.main_text.sprite.center()
         
         self.highscore_text = pygame.sprite.GroupSingle(Text(Settings.font, 24, Settings.font_color, 5, 5))
         
         self.restart_button = pygame.sprite.GroupSingle(Text(Settings.font, 48, Settings.font_color, 5, 5))
-        self.restart_button.sprite.set_text("Try Again")
+        self.restart_button.sprite.set_text("Try Again?")
         self.restart_button.sprite.center_x()
         self.restart_button.sprite.get_rect().bottom = Settings.height - Settings.button_border_dist
         
@@ -423,7 +464,7 @@ class Game_Over(Scene):
                     self.press_button()
 
     def cursor_button_collide(self):
-        return self.restart_button.sprite.get_rect().collidepoint(self.cursor.sprite.get_pos())
+        return self.restart_button.sprite.get_rect().colliderect(self.cursor.sprite.get_rect())
 
     def handle_cursor_icon(self):
         if self.cursor_button_collide():
